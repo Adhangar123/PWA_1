@@ -1,6 +1,17 @@
 /* eslint-disable no-restricted-globals */
 
-// Background Sync Listener
+// ---- Workbox imports ----
+import { precacheAndRoute } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
+import { skipWaiting } from 'workbox-core';
+
+skipWaiting();
+clientsClaim();
+
+// 🔥 यह लाइन Workbox build के लिए जरूरी है
+precacheAndRoute(self.__WB_MANIFEST);
+
+// ---- Your Background Sync Listener ----
 self.addEventListener('sync', event => {
   if (event.tag === 'sync-farmers') {
     event.waitUntil(notifyClientsToSync());
