@@ -16,7 +16,6 @@ export default function MapCapture({
 
   const rad = (deg) => (deg * Math.PI) / 180;
 
-  // ✅ FIX: Wrapped calculateArea in useCallback
   const calculateArea = useCallback((pts) => {
     if (pts.length < 3) return 0;
 
@@ -35,7 +34,7 @@ export default function MapCapture({
     return Math.abs((total * R * R) / 2);
   }, []);
 
-  // MAP INIT — fine
+  // MAP INIT
   useEffect(() => {
     if (!mapRef.current) {
       mapRef.current = L.map("capture-map", {
@@ -47,13 +46,11 @@ export default function MapCapture({
         maxZoom: 22,
       }).addTo(mapRef.current);
 
-      setTimeout(() => {
-        mapRef.current.invalidateSize();
-      }, 150);
+      setTimeout(() => mapRef.current.invalidateSize(), 150);
     }
   }, []);
 
-  // MAIN EFFECT — area + polygon update
+  // DRAW POLYGON WHEN SAVED
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -61,9 +58,9 @@ export default function MapCapture({
       mapRef.current.removeLayer(polygonRef.current);
     }
 
-    if (points.length >= 3) {
+    if (polygonSaved && points.length >= 3) {
       polygonRef.current = L.polygon(points, {
-        color: polygonSaved ? "blue" : "green",
+        color: "blue",
         weight: 2,
         fillOpacity: 0.3,
       }).addTo(mapRef.current);
@@ -74,17 +71,12 @@ export default function MapCapture({
     }
 
     setArea(calculateArea(points));
-  }, [points, polygonSaved, calculateArea, setArea]);
+  }, [polygonSaved, points, calculateArea, setArea]);
 
-  // Capture GPS point
+  // CAPTURE POINT FUNCTION
   const capturePoint = () => {
-    if (polygonSaved) {
-      alert("Polygon already saved! Reset to edit again.");
-      return;
-    }
-
-    if (points.length >= 12) {
-      alert("Maximum 12 points allowed.");
+    if (points.length >= 50) {
+      alert("Maximum 50 GPS points allowed.");
       return;
     }
 
@@ -94,7 +86,6 @@ export default function MapCapture({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         };
-
         setPoints((prev) => [...prev, p]);
       },
       (err) => alert("GPS error: " + err.message),
@@ -102,14 +93,16 @@ export default function MapCapture({
     );
   };
 
-  const savePolygon = () => {
+  // SHOW POLYGON BUTTON CLICK
+  const showPolygon = () => {
     if (points.length < 3) {
-      alert("Minimum 3 points needed to save polygon.");
+      alert("Minimum 3 points required to draw polygon.");
       return;
     }
     setPolygonSaved(true);
   };
 
+  // RESET ALL
   const resetPolygon = () => {
     setPoints([]);
     setPolygonSaved(false);
@@ -124,16 +117,16 @@ export default function MapCapture({
       {/* CONTROLS */}
       <div className="map-controls">
         <button onClick={capturePoint} disabled={polygonSaved}>
-          📍 Capture Point ({points.length}/12)
+          📍 Capture Point ({points.length}/50)
         </button>
 
         {!polygonSaved ? (
           <button
             className="save-btn"
             disabled={points.length < 3}
-            onClick={savePolygon}
+            onClick={showPolygon}
           >
-            ✅ Save Polygon
+            👀 Show Polygon
           </button>
         ) : (
           <button className="edit-btn" onClick={resetPolygon}>
