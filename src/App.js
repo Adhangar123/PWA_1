@@ -7,7 +7,7 @@ import Footer from "./components/Footer";
 import OnboardForm from "./components/OnboardForm";
 import Help from "./components/Help";
 
-import { getPending } from "./utils/indexedDb"; // ✅ fixed path
+import { getPending } from "./utils/indexedDb";
 
 function App() {
   const [pending, setPending] = useState([]);
@@ -19,18 +19,16 @@ function App() {
       refreshPending();
     }
 
-    function onSWMessage(event) {
-      if (event.data?.type === "SYNC_PENDING") {
-        refreshPending();
-      }
+    function onSyncMsg() {
+      refreshPending();
     }
 
     window.addEventListener("online", onOnline);
-    navigator.serviceWorker.addEventListener("message", onSWMessage);
+    window.addEventListener("SYNC_PENDING", onSyncMsg);
 
     return () => {
       window.removeEventListener("online", onOnline);
-      navigator.serviceWorker.removeEventListener("message", onSWMessage);
+      window.removeEventListener("SYNC_PENDING", onSyncMsg);
     };
   }, []);
 
@@ -50,7 +48,6 @@ function App() {
             <div className="main-container">
               <div className="form-card">
                 <h2>Farmer Registration Form</h2>
-
                 <p className="status">
                   Status: {navigator.onLine ? "Online" : "Offline"}
                 </p>
@@ -67,7 +64,8 @@ function App() {
                   <ul>
                     {pending.map((item) => (
                       <li key={item.id}>
-                        <strong>{item.name}</strong> — {item.num_trees} trees — {item.status}
+                        <strong>{item.farmerName}</strong> —{" "}
+                        {item.points?.length || 0} points — {item.status}
                       </li>
                     ))}
                   </ul>

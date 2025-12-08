@@ -101,15 +101,18 @@ export default function OnboardForm() {
     <div className="form-wrapper">
       <h2 className="title">🌾 Farmer Onboarding</h2>
 
-      {/* ---------------- PROGRESS BAR ---------------- */}
+     {/* ---------------- PROGRESS BOXES ---------------- */}
       <div className="progress-container">
-        <div
-          className="progress-bar"
-          style={{
-            width: `${(currentStep / totalSteps) * 100}%`,
-          }}
-        />
+        {[1, 2, 3, 4].map((step) => (
+          <div
+            key={step}
+            className={`progress-step ${currentStep >= step ? "active" : ""}`}
+          >
+            {step}
+          </div>
+        ))}
       </div>
+
 
       <h3 className="step-heading">
         Step {currentStep} / {totalSteps}: {stepTitles[currentStep]}
