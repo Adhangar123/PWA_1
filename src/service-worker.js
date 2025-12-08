@@ -1,26 +1,73 @@
-/* eslint-disable no-restricted-globals */
+/* global self */
+import { openDB } from "idb";
 
-// ---- Workbox imports ----
-import { precacheAndRoute } from 'workbox-precaching';
-import { clientsClaim } from 'workbox-core';
-import { skipWaiting } from 'workbox-core';
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
-skipWaiting();
-clientsClaim();
-
-// 🔥 यह लाइन Workbox build के लिए जरूरी है
-precacheAndRoute(self.__WB_MANIFEST);
-
-// ---- Your Background Sync Listener ----
-self.addEventListener('sync', event => {
-  if (event.tag === 'sync-farmers') {
-    event.waitUntil(notifyClientsToSync());
+self.addEventListener("sync", (event) => {
+  if (event.tag === "sync-farmers") {
+    event.waitUntil(syncPendingFarmers());
   }
 });
 
-async function notifyClientsToSync() {
-  const clients = await self.clients.matchAll({ includeUncontrolled: true });
-  for (const client of clients) {
-    client.postMessage({ type: 'SYNC_PENDING' });
+async function syncPendingFarmers() {
+  const db = await openDB("farmer-db", 1);
+  const all = await db.getAll("pending");
+
+  for (const item of all) {
+    try {
+      const formData = new FormData();
+
+      // append normal fields
+      Object.keys(item).forEach((key) => {
+        if (
+          !["id", "status", "photo", "aadharCard", "agreement", "latitude", "longitude"]
+            .includes(key)
+        ) {
+          formData.append(key, item[key]);
+        }
+      });
+
+      // file uploads
+      if (item.photo) formData.append("photo", item.photo, "photo.jpg");
+      if (item.aadharCard) formData.append("aadharCard", item.aadharCard, "aadhaar.jpg");
+      if (item.agreement) formData.append("agreement", item.agreement, "agreement.jpg");
+
+      // GPS array
+      if (Array.isArray(item.latitude)) {
+        item.latitude.forEach((lat) => formData.append("latitude[]", lat));
+      }
+      if (Array.isArray(item.longitude)) {
+        item.longitude.forEach((lng) => formData.append("longitude[]", lng));
+      }
+
+      // POST to API
+      const res = await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
+        method: "POST",
+        body: formData,
+      });
+
+      // If success → Mark as synced
+      if (res.ok) {
+        item.status = "synced";
+        await db.put("pending", item);
+
+        notifyClients("Record Synced Successfully");
+      }
+    } catch (err) {
+      console.error("Sync Error:", err);
+    }
   }
+}
+
+function notifyClients(msg) {
+  self.clients.matchAll().then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({ type: "SYNC_PENDING", message: msg });
+    });
+  });
 }

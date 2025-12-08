@@ -1,26 +1,29 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import './index.css';
-import App from './App';
-import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
+import "./index.css";
 
-const container = document.getElementById('root');
+const container = document.getElementById("root");
 const root = createRoot(container);
 root.render(<App />);
 
-// Register the service worker with auto update
+
+// Register Service Worker
 serviceWorkerRegistration.register({
-  onUpdate: registration => {
-    console.log('SW update available', registration);
-  }
+  onUpdate: (reg) => {
+    console.log("Service worker update found!", reg);
+  },
 });
 
-// Listen for messages from SW (SYNC trigger)
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SYNC_PENDING') {
-      // You can trigger a client-side sync routine here if needed
-      window.dispatchEvent(new Event('SYNC_PENDING'));
+// Listen For Sync Messages
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "SYNC_PENDING") {
+      console.log("Background Sync Triggered: ", event.data.message);
+
+      // Trigger your UI update event
+      window.dispatchEvent(new Event("SYNC_PENDING"));
     }
   });
 }
