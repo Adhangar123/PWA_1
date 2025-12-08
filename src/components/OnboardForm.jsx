@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import { saveOfflineRecord } from "../utils/offline";
+import { saveOfflineRecord } from "../utils/indexedDb";
 import MapCapture from "./MapCapture";
 import "./OnboardForm.css";
 

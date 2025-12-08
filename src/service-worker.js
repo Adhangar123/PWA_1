@@ -4,6 +4,7 @@ import { openDB } from "idb";
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
@@ -19,14 +20,15 @@ async function syncPendingFarmers() {
   const all = await db.getAll("pending");
 
   for (const item of all) {
+    if (item.status === "synced") continue;
+
     try {
       const formData = new FormData();
 
       // append normal fields
       Object.keys(item).forEach((key) => {
         if (
-          !["id", "status", "photo", "aadharCard", "agreement", "latitude", "longitude"]
-            .includes(key)
+          !["id", "status", "photo", "aadharCard", "agreement", "latitude", "longitude"].includes(key)
         ) {
           formData.append(key, item[key]);
         }
@@ -37,13 +39,9 @@ async function syncPendingFarmers() {
       if (item.aadharCard) formData.append("aadharCard", item.aadharCard, "aadhaar.jpg");
       if (item.agreement) formData.append("agreement", item.agreement, "agreement.jpg");
 
-      // GPS array
-      if (Array.isArray(item.latitude)) {
-        item.latitude.forEach((lat) => formData.append("latitude[]", lat));
-      }
-      if (Array.isArray(item.longitude)) {
-        item.longitude.forEach((lng) => formData.append("longitude[]", lng));
-      }
+      // GPS arrays
+      if (Array.isArray(item.latitude)) item.latitude.forEach((lat) => formData.append("latitude[]", lat));
+      if (Array.isArray(item.longitude)) item.longitude.forEach((lng) => formData.append("longitude[]", lng));
 
       // POST to API
       const res = await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
@@ -51,11 +49,9 @@ async function syncPendingFarmers() {
         body: formData,
       });
 
-      // If success → Mark as synced
       if (res.ok) {
         item.status = "synced";
         await db.put("pending", item);
-
         notifyClients("Record Synced Successfully");
       }
     } catch (err) {

@@ -1,28 +1,27 @@
+// src/index.js
 import React from "react";
-import { createRoot } from "react-dom/client";
+import ReactDOM from "react-dom/client";
 import App from "./App";
-import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 import "./index.css";
+import * as serviceWorkerRegistration from "./serviceWorkerRegistration";
 
-const container = document.getElementById("root");
-const root = createRoot(container);
+const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
 
-
-// Register Service Worker
+// Register Service Worker (CRA Compatible)
 serviceWorkerRegistration.register({
   onUpdate: (reg) => {
-    console.log("Service worker update found!", reg);
+    console.log("SW update detected!", reg);
   },
 });
 
-// Listen For Sync Messages
+// Listen For SW → Client Messages
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.type === "SYNC_PENDING") {
-      console.log("Background Sync Triggered: ", event.data.message);
+      console.log("⏳ Background Sync Triggered", event.data.message);
 
-      // Trigger your UI update event
+      // Trigger event to refresh pending list
       window.dispatchEvent(new Event("SYNC_PENDING"));
     }
   });
