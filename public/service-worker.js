@@ -52,7 +52,7 @@ self.addEventListener("sync", async (event) => {
 
     for (let item of all) {
       try {
-        await fetch("https://your-api.com/api/submit", {
+        await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(item),
