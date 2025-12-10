@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+// src/components/OnboardForm.jsx
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { saveOfflineRecord } from "../utils/indexedDb";
+import { saveOfflineRecord } from "../utils/offline";
 import MapCapture from "./MapCapture";
 import "./OnboardForm.css";
 
@@ -21,75 +22,98 @@ export default function OnboardForm() {
   const goNext = () => setCurrentStep((s) => Math.min(totalSteps, s + 1));
   const goBack = () => setCurrentStep((s) => Math.max(1, s - 1));
 
-  // ✔ FINAL SUBMIT
-  const finalSubmit = async () => {
-    const f = getValues();
+  // helper to build FormData from current form values
+  const buildFormData = (f) => {
+    const fd = new FormData();
+    fd.append("farmerName", f.farmerName || "");
+    fd.append("fatherName", f.fatherName || "");
+    fd.append("contact", f.contact || "");
+    fd.append("age", f.age || "");
+    fd.append("gender", f.gender || "");
+    fd.append("state", f.state || "");
+    fd.append("district", f.district || "");
+    fd.append("village", f.village || "");
+    fd.append("landArea", f.landArea || "");
+    fd.append("surveyNumber", f.surveyNumber || "");
+    fd.append("cropType", f.cropType || "");
+    fd.append("irrigationSource", f.irrigationSource || "");
+    fd.append("notes", f.notes || "");
 
-    const formData = new FormData();
-    formData.append("farmerName", f.farmerName || "");
-    formData.append("fatherName", f.fatherName || "");
-    formData.append("contact", f.contact || "");
-    formData.append("age", f.age || "");
-    formData.append("gender", f.gender || "");
-    formData.append("state", f.state || "");
-    formData.append("district", f.district || "");
-    formData.append("village", f.village || "");
-    formData.append("landArea", f.landArea || "");
-    formData.append("surveyNumber", f.surveyNumber || "");
-    formData.append("cropType", f.cropType || "");
-    formData.append("irrigationSource", f.irrigationSource || "");
-    formData.append("notes", f.notes || "");
-
-    if (photo) formData.append("photo", photo);
-    if (aadharCard) formData.append("aadharCard", aadharCard);
-    if (agreement) formData.append("agreement", agreement);
+    if (photo) fd.append("photo", photo);
+    if (aadharCard) fd.append("aadharCard", aadharCard);
+    if (agreement) fd.append("agreement", agreement);
 
     points.forEach((p) => {
-      formData.append("latitude[]", p.lat);
-      formData.append("longitude[]", p.lng);
+      fd.append("latitude[]", p.lat);
+      fd.append("longitude[]", p.lng);
     });
 
-    const isOnline = navigator.onLine;
+    return fd;
+  };
+const finalSubmit = async () => {
+  const f = getValues();
+  const fd = buildFormData(f);
 
-    // ONLINE
-    if (isOnline) {
-      try {
-        const res = await fetch(
-          "https://new-survey-zh0e.onrender.com/api/submit",
-          { method: "POST", body: formData }
-        );
+  if (navigator.onLine) {
+    try {
+      const res = await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
+        method: "POST",
+        body: fd,
+      });
 
-        const text = await res.text();
-        console.log("SERVER RESPONSE:", text);
-
-        if (res.ok) {
-          alert("🎉 Data Submitted Successfully!");
-          return;
-        }
-
-        alert("❌ Server error");
-      } catch (err) {
-        console.log("Online failed, saving offline...");
+      if (res.ok) {
+        alert("✅ Submitted Successfully!");
+        return;
       }
+    } catch (err) {
+      console.log("Online failed, saving offline…");
     }
+  }
 
-    // OFFLINE
-    await saveOfflineRecord({
-      id: Date.now(),
-      ...f,
-      photo,
-      aadharCard,
-      agreement,
-      points,
-      createdAt: new Date().toISOString(),
-    });
-
-    alert("📴 Offline — data saved locally!");
+  // FINAL OFFLINE FORMAT
+  const record = {
+    id: Date.now().toString(),
+    formFields: {
+      farmerName: f.farmerName || "",
+      fatherName: f.fatherName || "",
+      contact: f.contact || "",
+      age: f.age || "",
+      gender: f.gender || "",
+      state: f.state || "",
+      district: f.district || "",
+      village: f.village || "",
+      landArea: f.landArea || "",
+      surveyNumber: f.surveyNumber || "",
+      cropType: f.cropType || "",
+      irrigationSource: f.irrigationSource || "",
+      notes: f.notes || "",
+    },
+    photo,
+    aadharCard,
+    agreement,
+    points,
   };
 
-  // ----------------------------
-  // STEP TITLE
-  // ----------------------------
+  await saveOfflineRecord(record);
+  alert("📴 Offline — Saved Locally!");
+};
+
+  // optional: listen to messages from SW (sync status)
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (!event.data) return;
+      const data = event.data;
+      if (data.type === "SYNC_SUCCESS") {
+        // you can refresh pending list or show toast
+        console.log("Sync success for id:", data.id);
+      }
+    });
+  }, []);
+
+  // UI omitted for brevity — your existing markup remains; using the same handlers
+  // I'll return the same JSX structure you had, just using the new finalSubmit handler.
+
   const stepTitles = {
     1: "Farmer Information",
     2: "Upload Documents",
@@ -101,7 +125,6 @@ export default function OnboardForm() {
     <div className="form-wrapper">
       <h2 className="title">🌾 Farmer Onboarding</h2>
 
-     {/* ---------------- PROGRESS BOXES ---------------- */}
       <div className="progress-container">
         {[1, 2, 3, 4].map((step) => (
           <div
@@ -113,14 +136,10 @@ export default function OnboardForm() {
         ))}
       </div>
 
-
       <h3 className="step-heading">
         Step {currentStep} / {totalSteps}: {stepTitles[currentStep]}
       </h3>
 
-      {/* -------------------------------------------------- */}
-      {/* STEP 1 - FARMER INFORMATION                       */}
-      {/* -------------------------------------------------- */}
       {currentStep === 1 && (
         <div className="section-box">
           <h3 className="section-title">Farmer Information</h3>
@@ -202,26 +221,23 @@ export default function OnboardForm() {
         </div>
       )}
 
-      {/* -------------------------------------------------- */}
-      {/* STEP 2 - UPLOAD DOCUMENTS                         */}
-      {/* -------------------------------------------------- */}
       {currentStep === 2 && (
         <div className="section-box">
           <h3 className="section-title">Upload Documents</h3>
 
           <div className="field">
             <label>Farmer Photo</label>
-            <input type="file" onChange={(e) => setPhoto(e.target.files[0])} />
+            <input type="file" onChange={(e) => setPhoto(e.target.files[0] || null)} />
           </div>
 
           <div className="field">
             <label>Aadhar Card</label>
-            <input type="file" onChange={(e) => setAadharCard(e.target.files[0])} />
+            <input type="file" onChange={(e) => setAadharCard(e.target.files[0] || null)} />
           </div>
 
           <div className="field">
             <label>Agreement Letter</label>
-            <input type="file" onChange={(e) => setAgreement(e.target.files[0])} />
+            <input type="file" onChange={(e) => setAgreement(e.target.files[0] || null)} />
           </div>
 
           <div className="step-buttons">
@@ -231,9 +247,6 @@ export default function OnboardForm() {
         </div>
       )}
 
-      {/* -------------------------------------------------- */}
-      {/* STEP 3 - MAP CAPTURE                              */}
-      {/* -------------------------------------------------- */}
       {currentStep === 3 && (
         <div className="section-box">
           <h3 className="section-title">Capture Boundary</h3>
@@ -254,9 +267,6 @@ export default function OnboardForm() {
         </div>
       )}
 
-      {/* -------------------------------------------------- */}
-      {/* STEP 4 - FINAL SUBMIT                             */}
-      {/* -------------------------------------------------- */}
       {currentStep === 4 && (
         <div className="section-box">
           <h3 className="section-title">Final Submit</h3>
