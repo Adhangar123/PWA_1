@@ -6,7 +6,7 @@ const FILES_TO_CACHE = ["/", "/index.html", "/manifest.json"];
 
 const DB_NAME = "farmer-db";
 const STORE = "pending";
-const API_URL = "https://new-survey-zh0e.onrender.com/api/submit";
+const API_URL = "https://backend-survey-13977221722.asia-south2.run.app/api/submit";
 
 /* Install */
 self.addEventListener("install", (event) => {

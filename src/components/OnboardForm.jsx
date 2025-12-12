@@ -56,7 +56,7 @@ const finalSubmit = async () => {
 
   if (navigator.onLine) {
     try {
-      const res = await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
+      const res = await fetch("https://backend-survey-13977221722.asia-south2.run.app/api/submit", {
         method: "POST",
         body: fd,
       });
