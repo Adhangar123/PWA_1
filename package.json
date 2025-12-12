@@ -5,6 +5,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "cors": "^2.8.5",
+    "country-state-city": "^3.2.1",
     "cra-template-pwa": "2.0.0",
     "framer-motion": "^12.23.24",
     "idb": "^8.0.3",

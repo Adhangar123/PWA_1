@@ -47,7 +47,7 @@ function App() {
           element={
             <div className="main-container">
               <div className="form-card">
-                <h2>Farmer Registration Form</h2>
+                <h2>Fit Survey Form</h2>
                 <p className="status">
                   Status: {navigator.onLine ? "Online" : "Offline"}
                 </p>
