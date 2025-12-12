@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Country, State, City } from "country-state-city"; 
-import { saveOfflineRecord } from "../utils/indexedDb";
+import { saveOfflineRecord } from "../utils/offline";
 import MapCapture from "./MapCapture";
 import "./OnboardForm.css";
 
@@ -106,7 +106,7 @@ export default function OnboardForm() {
 
     if (isOnline) {
       try {
-        const res = await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
+        const res = await fetch("https://backend-survey-13977221722.asia-south2.run.app/api/submit", {
           method: "POST",
           body: formData,
         });

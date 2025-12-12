@@ -1,90 +1,105 @@
 /* eslint-disable no-restricted-globals */
+importScripts("https://cdn.jsdelivr.net/npm/idb/build/iife/index-min.js");
 
-// Cache name
 const CACHE_NAME = "farmer-app-cache-v1";
+const FILES_TO_CACHE = ["/", "/index.html", "/manifest.json"];
 
-// Files to cache
-const FILES_TO_CACHE = [
-  "/",
-  "/index.html",
-  "/manifest.json"
-];
+const DB_NAME = "farmer-db";
+const STORE = "pending";
+const API_URL = "https://backend-survey-13977221722.asia-south2.run.app/api/submit";
 
-// INSTALL
-self.addEventListener("install", event => {
+/* Install */
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      console.log("Caching app shell");
-      return cache.addAll(FILES_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES_TO_CACHE))
   );
   self.skipWaiting();
 });
 
-// ACTIVATE
-self.addEventListener("activate", event => {
+/* Activate */
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
+    caches.keys().then((keys) =>
       Promise.all(
-        keys.map(key => {
-          if (key !== CACHE_NAME) return caches.delete(key);
-        })
+        keys.map((key) =>
+          key !== CACHE_NAME ? caches.delete(key) : null
+        )
       )
     )
   );
   self.clients.claim();
 });
 
-// FETCH (Network → Fallback to cache)
-self.addEventListener("fetch", event => {
+/* Fetch – NETWORK FIRST */
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+
+  // Don’t cache POST (form uploads)
+  if (req.method === "POST") {
+    return event.respondWith(fetch(req).catch(() => new Response(null)));
+  }
+
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(req).catch(() => caches.match(req))
   );
 });
 
-// BACKGROUND SYNC
-self.addEventListener("sync", async (event) => {
-  if (event.tag === "sync-pending-forms") {
-    console.log("Syncing pending offline forms...");
-
-    const db = await openDB();
-    const all = await db.getAll("pending");
-
-    for (let item of all) {
-      try {
-        await fetch("https://new-survey-zh0e.onrender.com/api/submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item),
-        });
-
-        await db.delete("pending", item.id);
-      } catch (err) {
-        console.log("Retry later...");
+/* Open DB */
+function openDBLocal() {
+  return idb.openDB(DB_NAME, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE, { keyPath: "id" });
       }
-    }
+    },
+  });
+}
 
-    self.clients.matchAll().then(clients => {
-      clients.forEach(client =>
-        client.postMessage({ type: "SYNC_PENDING", message: "Pending data synced!" })
-      );
-    });
+/* Background Sync */
+self.addEventListener("sync", (event) => {
+  if (event.tag === "sync-pending-forms") {
+    event.waitUntil(syncPending());
   }
 });
 
-// IndexedDB for SW
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("farmer-db", 1);
+async function syncPending() {
+  const db = await openDBLocal();
+  const store = db.transaction(STORE, "readwrite").objectStore(STORE);
+  const all = await store.getAll();
 
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("pending")) {
-        db.createObjectStore("pending", { keyPath: "id" });
+  if (!all.length) return;
+
+  for (const item of all) {
+    try {
+      const fd = new FormData();
+
+      Object.keys(item.formFields).forEach((key) => {
+        fd.append(key, item.formFields[key]);
+      });
+
+      if (item.photo) fd.append("photo", item.photo);
+      if (item.aadharCard) fd.append("aadharCard", item.aadharCard);
+      if (item.agreement) fd.append("agreement", item.agreement);
+
+      item.points.forEach((p) => {
+        fd.append("latitude[]", p.lat);
+        fd.append("longitude[]", p.lng);
+      });
+
+      const res = await fetch(API_URL, { method: "POST", body: fd });
+
+      if (res.ok) {
+        await store.delete(item.id);
+        notify({ type: "SYNC_SUCCESS", id: item.id });
       }
-    };
+    } catch (e) {
+      console.log("Sync failed", e);
+    }
+  }
+}
 
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = reject;
+function notify(msg) {
+  self.clients.matchAll().then((clients) => {
+    clients.forEach((client) => client.postMessage(msg));
   });
 }
