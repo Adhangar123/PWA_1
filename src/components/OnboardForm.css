@@ -197,3 +197,40 @@
     font-size: 28px;
   }
 }
+/* Prevent any overflow */
+* {
+  box-sizing: border-box;
+}
+
+/* Long text safety */
+.field label,
+.progress-step,
+.section-title {
+  word-break: break-word;
+}
+
+/* File input safety */
+input[type="file"] {
+  max-width: 100%;
+  font-size: 12px;
+}
+
+/* Buttons never overlap */
+.step-buttons {
+  flex-wrap: wrap;
+}
+
+.step-buttons button {
+  min-width: 120px;
+}
+
+/* Landscape mobile fix */
+@media (max-width: 768px) and (orientation: landscape) {
+  .fields-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.form-wrapper {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
+}
