@@ -1,14 +1,15 @@
 /* eslint-disable no-restricted-globals */
 importScripts("https://cdn.jsdelivr.net/npm/idb/build/iife/index-min.js");
 
-const CACHE_NAME = "farmer-app-cache-v1";
+const CACHE_NAME = "farmer-app-cache-v2";
 const FILES_TO_CACHE = ["/", "/index.html", "/manifest.json"];
 
 const DB_NAME = "farmer-db";
 const STORE = "pending";
-const API_URL = "https://backend-survey-13977221722.asia-south2.run.app/api/submit";
+const API_URL =
+  "https://backend-survey-13977221722.asia-south2.run.app/api/submit";
 
-/* Install */
+/* INSTALL */
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES_TO_CACHE))
@@ -16,7 +17,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-/* Activate */
+/* ACTIVATE */
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -30,21 +31,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-/* Fetch – NETWORK FIRST */
+/* FETCH – NETWORK FIRST */
 self.addEventListener("fetch", (event) => {
-  const req = event.request;
-
-  // Don’t cache POST (form uploads)
-  if (req.method === "POST") {
-    return event.respondWith(fetch(req).catch(() => new Response(null)));
-  }
-
-  event.respondWith(
-    fetch(req).catch(() => caches.match(req))
-  );
+  if (event.request.method === "POST") return;
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
 
-/* Open DB */
+/* OPEN INDEXED DB */
 function openDBLocal() {
   return idb.openDB(DB_NAME, 1, {
     upgrade(db) {
@@ -55,7 +48,7 @@ function openDBLocal() {
   });
 }
 
-/* Background Sync */
+/* BACKGROUND SYNC */
 self.addEventListener("sync", (event) => {
   if (event.tag === "sync-pending-forms") {
     event.waitUntil(syncPending());
@@ -64,42 +57,68 @@ self.addEventListener("sync", (event) => {
 
 async function syncPending() {
   const db = await openDBLocal();
-  const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-  const all = await store.getAll();
+  const tx = db.transaction(STORE, "readwrite");
+  const store = tx.objectStore(STORE);
 
+  const all = await store.getAll();
   if (!all.length) return;
 
   for (const item of all) {
     try {
       const fd = new FormData();
 
-      Object.keys(item.formFields).forEach((key) => {
-        fd.append(key, item.formFields[key]);
+      /* FORM FIELDS (same as OnboardForm finalSubmit) */
+      Object.keys(item).forEach((key) => {
+        if (
+          [
+            "id",
+            "points",
+            "farmerPhoto",
+            "farmerID",
+            "agreement",
+            "createdAt",
+          ].includes(key)
+        )
+          return;
+
+        fd.append(key, item[key] ?? "");
       });
 
-      if (item.photo) fd.append("photo", item.photo);
-      if (item.aadharCard) fd.append("aadharCard", item.aadharCard);
+      /* LAT / LNG */
+      fd.append("latitude", item.latitude || "");
+      fd.append("longitude", item.longitude || "");
+
+      /* MAP POINTS */
+      if (Array.isArray(item.points)) {
+        item.points.forEach((p, idx) => {
+          fd.append(`points[${idx}][lat]`, p.lat);
+          fd.append(`points[${idx}][lng]`, p.lng);
+        });
+      }
+
+      /* FILES */
+      if (item.farmerPhoto) fd.append("photo", item.farmerPhoto);
+      if (item.farmerID) fd.append("aadharCard", item.farmerID);
       if (item.agreement) fd.append("agreement", item.agreement);
 
-      item.points.forEach((p) => {
-        fd.append("latitude[]", p.lat);
-        fd.append("longitude[]", p.lng);
+      const res = await fetch(API_URL, {
+        method: "POST",
+        body: fd,
       });
-
-      const res = await fetch(API_URL, { method: "POST", body: fd });
 
       if (res.ok) {
         await store.delete(item.id);
-        notify({ type: "SYNC_SUCCESS", id: item.id });
+        notifyClient({ type: "SYNC_SUCCESS", id: item.id });
       }
-    } catch (e) {
-      console.log("Sync failed", e);
+    } catch (err) {
+      console.error("❌ Sync failed", err);
     }
   }
 }
 
-function notify(msg) {
+/* NOTIFY UI */
+function notifyClient(message) {
   self.clients.matchAll().then((clients) => {
-    clients.forEach((client) => client.postMessage(msg));
+    clients.forEach((client) => client.postMessage(message));
   });
 }

@@ -8,17 +8,19 @@ export default function MapCapture({
   setPoints,
   area,
   setArea,
-  polygonSaved,
   setPolygonSaved,
+  setLatitude,
+  setLongitude,
 }) {
   const mapRef = useRef(null);
   const polygonRef = useRef(null);
-  const lineRef = useRef(null); // 🔥 breadcrumb line
+  const lineRef = useRef(null);
 
   const rad = (deg) => (deg * Math.PI) / 180;
 
+  // 🔢 Calculate polygon area (m²)
   const calculateArea = useCallback((pts) => {
-    if (pts.length < 3) return 0;
+    if (pts.length < 4) return 0;
 
     const R = 6378137;
     let total = 0;
@@ -35,7 +37,7 @@ export default function MapCapture({
     return Math.abs((total * R * R) / 2);
   }, []);
 
-  // INIT MAP
+  // 🗺️ INIT MAP
   useEffect(() => {
     if (!mapRef.current) {
       mapRef.current = L.map("capture-map", {
@@ -51,21 +53,21 @@ export default function MapCapture({
     }
   }, []);
 
-  // 🔥 DRAW POLYGON + BREADCRUMB ON EVERY UPDATE
+  // 🔁 DRAW LINE + POLYGON
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // --- REMOVE OLD POLYGON ---
+    // Remove old polygon
     if (polygonRef.current) {
       mapRef.current.removeLayer(polygonRef.current);
     }
 
-    // --- REMOVE OLD LINE ---
+    // Remove old line
     if (lineRef.current) {
       mapRef.current.removeLayer(lineRef.current);
     }
 
-    // ----- BREADCRUMB LINE (always show if ≥ 2 points) -----
+    // Breadcrumb line (≥ 2 points)
     if (points.length >= 2) {
       lineRef.current = L.polyline(points, {
         color: "orange",
@@ -74,8 +76,8 @@ export default function MapCapture({
       }).addTo(mapRef.current);
     }
 
-    // ----- POLYGON (only if ≥ 3 points) -----
-    if (points.length >= 3) {
+    // Polygon (≥ 4 points)
+    if (points.length >= 4) {
       polygonRef.current = L.polygon(points, {
         color: "green",
         weight: 2,
@@ -90,41 +92,71 @@ export default function MapCapture({
     setArea(calculateArea(points));
   }, [points, calculateArea, setArea]);
 
-  // CAPTURE POINT
+  // 📍 CAPTURE GPS POINT
   const capturePoint = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported");
+      return;
+    }
+
     if (points.length >= 50) {
       alert("Maximum 50 GPS points allowed.");
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPoints((prev) => [
-          ...prev,
-          { lat: pos.coords.latitude, lng: pos.coords.longitude },
-        ]);
-      },
-      (err) => alert("GPS error: " + err.message),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+   navigator.geolocation.getCurrentPosition(
+  (pos) => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+
+    // 🔥 parent (OnboardForm) me latitude / longitude set
+    setLatitude(lat);
+    setLongitude(lng);
+
+    // 🔥 map points me add
+    setPoints((prev) => [
+      ...prev,
+      { lat, lng },
+    ]);
+  },
+  (err) => {
+    alert("GPS error: " + err.message);
+  },
+  {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
+  }
+);
+
   };
 
-  // SAVE POLYGON
+  // 💾 SAVE POLYGON
   const savePolygon = () => {
-    if (points.length < 3) {
-      alert("Minimum 3 points required to save polygon.");
+    if (points.length < 4) {
+      alert("Minimum 4 GPS points required to save land parcel.");
       return;
     }
 
     setPolygonSaved(true);
-    alert("Polygon saved successfully!");
+    alert("Land parcel saved successfully!");
   };
 
-  // RESET
+  // ♻️ RESET
   const resetPolygon = () => {
     setPoints([]);
     setArea(0);
     setPolygonSaved(false);
+
+    if (polygonRef.current) {
+      mapRef.current.removeLayer(polygonRef.current);
+      polygonRef.current = null;
+    }
+
+    if (lineRef.current) {
+      mapRef.current.removeLayer(lineRef.current);
+      lineRef.current = null;
+    }
   };
 
   return (
@@ -138,7 +170,7 @@ export default function MapCapture({
 
         <button
           className="save-btn"
-          disabled={points.length < 3}
+          disabled={points.length < 4}
           onClick={savePolygon}
         >
           💾 Save Polygon

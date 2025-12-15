@@ -13,17 +13,20 @@ export function getDB() {
   });
 }
 
-export async function savePending(r) {
+// 🔹 Save offline record
+export async function savePending(record) {
   const db = await getDB();
-  await db.put(STORE, r);
+  await db.put(STORE, record);
 }
 
+// 🔹 Get all pending records
 export async function getPending() {
   const db = await getDB();
   return db.getAll(STORE);
 }
 
+// 🔹 Delete synced record
 export async function deletePending(id) {
   const db = await getDB();
-  return db.delete(STORE, id);
+  await db.delete(STORE, id);
 }
