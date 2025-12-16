@@ -15,59 +15,56 @@ export default function MapCapture({
   const mapRef = useRef(null);
   const polygonRef = useRef(null);
   const lineRef = useRef(null);
+  const watchIdRef = useRef(null);
 
   const rad = (deg) => (deg * Math.PI) / 180;
 
-  // 🔢 Calculate polygon area (m²)
+  // 🔢 Area calc
   const calculateArea = useCallback((pts) => {
     if (pts.length < 4) return 0;
-
     const R = 6378137;
     let total = 0;
 
     for (let i = 0; i < pts.length; i++) {
       const p1 = pts[i];
       const p2 = pts[(i + 1) % pts.length];
-
       total +=
         rad(p2.lng - p1.lng) *
         (2 + Math.sin(rad(p1.lat)) + Math.sin(rad(p2.lat)));
     }
-
     return Math.abs((total * R * R) / 2);
   }, []);
 
-  // 🗺️ INIT MAP
+  // 🗺️ MAP INIT
   useEffect(() => {
     if (!mapRef.current) {
-      mapRef.current = L.map("capture-map", {
-        center: [20.59, 78.96],
-        zoom: 6,
-      });
+      mapRef.current = L.map("capture-map").setView([20.59, 78.96], 6);
 
-      L.tileLayer("https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
-        maxZoom: 22,
-      }).addTo(mapRef.current);
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          maxZoom: 22,
+        }
+      ).addTo(mapRef.current);
 
-      setTimeout(() => mapRef.current.invalidateSize(), 150);
+
+      setTimeout(() => mapRef.current.invalidateSize(), 200);
     }
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, []);
 
-  // 🔁 DRAW LINE + POLYGON
+  // 🔁 DRAW POLY
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Remove old polygon
-    if (polygonRef.current) {
-      mapRef.current.removeLayer(polygonRef.current);
-    }
+    if (polygonRef.current) mapRef.current.removeLayer(polygonRef.current);
+    if (lineRef.current) mapRef.current.removeLayer(lineRef.current);
 
-    // Remove old line
-    if (lineRef.current) {
-      mapRef.current.removeLayer(lineRef.current);
-    }
-
-    // Breadcrumb line (≥ 2 points)
     if (points.length >= 2) {
       lineRef.current = L.polyline(points, {
         color: "orange",
@@ -76,11 +73,9 @@ export default function MapCapture({
       }).addTo(mapRef.current);
     }
 
-    // Polygon (≥ 4 points)
     if (points.length >= 4) {
       polygonRef.current = L.polygon(points, {
         color: "green",
-        weight: 2,
         fillOpacity: 0.3,
       }).addTo(mapRef.current);
 
@@ -92,54 +87,71 @@ export default function MapCapture({
     setArea(calculateArea(points));
   }, [points, calculateArea, setArea]);
 
-  // 📍 CAPTURE GPS POINT
+  // 📍 UNIVERSAL GPS CAPTURE
   const capturePoint = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation not supported");
+      alert("❌ GPS not supported on this device");
       return;
     }
 
     if (points.length >= 50) {
-      alert("Maximum 50 GPS points allowed.");
+      alert("⚠️ Max 50 GPS points allowed");
       return;
     }
 
-   navigator.geolocation.getCurrentPosition(
-  (pos) => {
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
+    // 🔄 fallback logic
+    let resolved = false;
 
-    // 🔥 parent (OnboardForm) me latitude / longitude set
-    setLatitude(lat);
-    setLongitude(lng);
+    const success = (pos) => {
+      if (resolved) return;
+      resolved = true;
 
-    // 🔥 map points me add
-    setPoints((prev) => [
-      ...prev,
-      { lat, lng },
-    ]);
-  },
-  (err) => {
-    alert("GPS error: " + err.message);
-  },
-  {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 0,
-  }
-);
+      const { latitude, longitude, accuracy } = pos.coords;
 
+      // 🛑 very bad accuracy ignore
+      if (accuracy > 100) {
+        alert("📡 GPS accuracy low, please wait...");
+        resolved = false;
+        return;
+      }
+
+      setLatitude(latitude.toFixed(6));
+      setLongitude(longitude.toFixed(6));
+
+      setPoints((prev) => [...prev, { lat: latitude, lng: longitude }]);
+
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+
+    const error = () => {
+      if (!resolved) {
+        // 🔁 fallback to low accuracy
+        navigator.geolocation.getCurrentPosition(success, () => {
+          alert("❌ Unable to capture GPS. Move to open area.");
+        }, {
+          enableHighAccuracy: false,
+        });
+      }
+    };
+
+    // 🚀 watchPosition works BEST across devices
+    watchIdRef.current = navigator.geolocation.watchPosition(success, error, {
+      enableHighAccuracy: false,
+      maximumAge: 10000,
+    });
   };
 
-  // 💾 SAVE POLYGON
+  // 💾 SAVE
   const savePolygon = () => {
     if (points.length < 4) {
-      alert("Minimum 4 GPS points required to save land parcel.");
+      alert("Minimum 4 points required");
       return;
     }
-
     setPolygonSaved(true);
-    alert("Land parcel saved successfully!");
+    alert("✅ Land parcel saved");
   };
 
   // ♻️ RESET
@@ -147,41 +159,29 @@ export default function MapCapture({
     setPoints([]);
     setArea(0);
     setPolygonSaved(false);
-
-    if (polygonRef.current) {
-      mapRef.current.removeLayer(polygonRef.current);
-      polygonRef.current = null;
-    }
-
-    if (lineRef.current) {
-      mapRef.current.removeLayer(lineRef.current);
-      lineRef.current = null;
-    }
+    if (polygonRef.current) mapRef.current.removeLayer(polygonRef.current);
+    if (lineRef.current) mapRef.current.removeLayer(lineRef.current);
   };
 
   return (
     <div className="map-wrapper">
-      <div id="capture-map" className="map-container"></div>
+      <div id="capture-map" className="map-container" />
 
       <div className="map-controls">
         <button onClick={capturePoint}>
           📍 Capture Point ({points.length}/50)
         </button>
 
-        <button
-          className="save-btn"
-          disabled={points.length < 4}
-          onClick={savePolygon}
-        >
+        <button disabled={points.length < 4} onClick={savePolygon}>
           💾 Save Polygon
         </button>
 
-        <button className="edit-btn" onClick={resetPolygon}>
+        <button onClick={resetPolygon}>
           ✏️ Reset Polygon
         </button>
 
         <div className="area-display">
-          <strong>Area: </strong>
+          <strong>Area:</strong>{" "}
           {area > 0 ? (area / 10000).toFixed(4) + " Ha" : "—"}
         </div>
       </div>

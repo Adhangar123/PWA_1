@@ -50,92 +50,48 @@ export default function OnboardForm() {
   };
 
   const goBack = () => setCurrentStep((s) => Math.max(1, s - 1));
-
- const finalSubmit = async () => {
+const finalSubmit = async () => {
   setIsSubmitting(true);
 
   try {
     const f = getValues();
     const formData = new FormData();
 
-    // CRP SECTION
+    // -------- FORM DATA --------
     formData.append("projectName", f.projectName || "");
     formData.append("interventionAreaType", f.interventionType || "");
     formData.append("surveyDate", f.surveyDate || "");
     formData.append("interviewerName", f.interviewerName || "");
 
-    // LOCATION
     formData.append("state", f.state || "");
     formData.append("district", f.district || "");
     formData.append("village", f.village || "");
     formData.append("block", f.block || "");
     formData.append("grampanchayat", f.gramPanchayat || "");
 
-    // FARMER SECTION
     formData.append("farmerName", f.farmerName || "");
-    formData.append("contact", f.contact || ""); // matches cURL
+    formData.append("contact", f.contact || "");
     formData.append("gender", f.gender || "");
     formData.append("khata_num", f.khataNumber || "");
     formData.append("plot_num", f.plotNumber || "");
 
-    // // AGRICULTURE DETAILS
-    // formData.append("landArea", f.landArea || "");
-    // formData.append("surveyNumber", f.surveyNumber || ""); // new field
-    // formData.append("cropType", f.cropType || "");
-    // formData.append("irrigationSource", f.irrigationSource || "");
-    // formData.append("notes", f.notes || "");
-
-    // LAT/LONG
     formData.append("latitude", latitude || "");
     formData.append("longitude", longitude || "");
 
-    // MAP POINTS
-    points.forEach((p, idx) => {
-      formData.append(`points[${idx}][lat]`, p.lat);
-      formData.append(`points[${idx}][lng]`, p.lng);
+    points.forEach((p, i) => {
+      formData.append(`points[${i}][lat]`, p.lat);
+      formData.append(`points[${i}][lng]`, p.lng);
     });
+
     formData.append("polygonSaved", polygonSaved ? "true" : "false");
     formData.append("area", area || 0);
 
-    // FILES
     if (farmerPhoto) formData.append("photo", farmerPhoto);
     if (farmerID) formData.append("aadharCard", farmerID);
     if (agreement) formData.append("agreement", agreement);
 
-    const isOnline = navigator.onLine;
-
-    if (isOnline) {
-      try {
-        const res = await fetch("https://backend-survey-13977221722.asia-south2.run.app/api/submit", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (res.ok) {
-          alert("🎉 Data submitted successfully!");
-        } else {
-          throw new Error("Server error");
-        }
-      } catch (err) {
-        console.log("Online failed, saving offline...", err);
-
-        await saveOfflineRecord({
-          id: Date.now(),
-          ...f,
-          farmerPhoto,
-          farmerID,
-          agreement,
-          points,
-          polygonSaved,
-          area,
-          latitude,
-          longitude,
-          createdAt: new Date().toISOString(),
-        });
-
-        alert("📴 Offline — Data saved locally!");
-      }
-    } else {
+    // 🚨 ONLY OFFLINE CASE
+    if (!navigator.onLine) {
       await saveOfflineRecord({
         id: Date.now(),
         ...f,
@@ -150,14 +106,37 @@ export default function OnboardForm() {
         createdAt: new Date().toISOString(),
       });
 
-      alert("📴 Offline — Data saved locally!");
+      alert("📴 No Internet — Data saved locally!");
+      return;
     }
 
+    // 🌐 ONLINE CASE
+    const res = await fetch(
+      "https://backend-survey-13977221722.asia-south2.run.app/api/submit",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!res.ok) {
+      const msg = await res.text();
+      console.error("Server Error:", msg);
+      alert("❌ Server error! Please try again.");
+      return;
+    }
+
+    // ✅ SUCCESS
+    alert("🎉 Data submitted successfully!");
+
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    alert("❌ Something went wrong. Please try again.");
   } finally {
-    // 🔥 Yeh hamesha chalega (success, error, offline sab me)
     setIsSubmitting(false);
   }
 };
+
 
 
   const stepTitles = {
